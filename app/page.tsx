@@ -22,6 +22,7 @@ import { MONTH_NAMES, formatCurrency } from "@/lib/types";
 
 const UNCATEGORIZED = "Uncategorized";
 const UNCATEGORIZED_COLOR = "#9ca3af";
+const PERSON_COLORS: Record<string, string> = { Jordan: "#2f6f6b", Nicole: "#c1573f" };
 
 export default function DashboardPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -86,6 +87,26 @@ export default function DashboardPage() {
     () => filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0),
     [filteredExpenses]
   );
+
+  const jordanTotal = useMemo(
+    () =>
+      filteredExpenses
+        .filter((e) => e.person === "Jordan")
+        .reduce((s, e) => s + (e.amount || 0), 0),
+    [filteredExpenses]
+  );
+  const nicoleTotal = useMemo(
+    () =>
+      filteredExpenses
+        .filter((e) => e.person === "Nicole")
+        .reduce((s, e) => s + (e.amount || 0), 0),
+    [filteredExpenses]
+  );
+  const settleDiff = jordanTotal - nicoleTotal;
+  const settleOwed = Math.abs(settleDiff) / 2;
+  let settleWho = "You're all square";
+  if (settleDiff > 0.005) settleWho = "Nicole owes Jordan";
+  else if (settleDiff < -0.005) settleWho = "Jordan owes Nicole";
 
   // Category names present in the filtered set, used as stacked bar keys.
   const activeCategoryNames = useMemo(() => {
@@ -172,8 +193,11 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Dashboard</h1>
-        <p>Shared expenses over time — filter by year, person, half, and category.</p>
+        <h1>Good evening, Jordan &amp; Nicole.</h1>
+        <p>
+          Here&apos;s how your shared spending looks
+          {yearFilter !== "all" ? ` in ${yearFilter}` : " across every year"}.
+        </p>
       </div>
 
       <div className="card">
@@ -241,14 +265,30 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="pills-row">
-        <div className="pill">
-          <span className="label">Total (filtered)</span>
-          <span className="value">{formatCurrency(totalSpend)}</span>
+      <div className="hero-grid">
+        <div className="hero-card settle">
+          <div className="hero-label">Settle up</div>
+          <div className="hero-value">{settleWho}</div>
+          {settleOwed > 0.005 && (
+            <div className="hero-value hero-accent">{formatCurrency(settleOwed)}</div>
+          )}
         </div>
-        <div className="pill">
-          <span className="label">Entries</span>
-          <span className="value">{filteredExpenses.length}</span>
+        <div className="hero-card">
+          <div className="hero-label">Total spent</div>
+          <div className="hero-value">{formatCurrency(totalSpend)}</div>
+          <div className="hero-sub">{filteredExpenses.length} entries</div>
+        </div>
+        <div className="hero-card">
+          <div className="hero-person-row">
+            <span className="dot" style={{ background: PERSON_COLORS.Jordan }} />
+            Jordan
+            <span className="amt">{formatCurrency(jordanTotal)}</span>
+          </div>
+          <div className="hero-person-row">
+            <span className="dot" style={{ background: PERSON_COLORS.Nicole }} />
+            Nicole
+            <span className="amt">{formatCurrency(nicoleTotal)}</span>
+          </div>
         </div>
       </div>
 
@@ -294,7 +334,9 @@ export default function DashboardPage() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={100}
+                      innerRadius={62}
+                      outerRadius={104}
+                      paddingAngle={2}
                       label={(d) => d.name}
                       labelLine={false}
                     >
@@ -320,7 +362,7 @@ export default function DashboardPage() {
                   <XAxis dataKey="label" fontSize={12} />
                   <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  <Line type="monotone" dataKey="total" stroke="#4f46e5" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="total" stroke="#3f7d5e" strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}

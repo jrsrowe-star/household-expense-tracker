@@ -98,8 +98,8 @@ export default function PersonPanel({
       )}
 
       <div style={{ marginTop: 12 }}>
-        <button className="btn btn-small" onClick={onAddRow}>
-          + Add expense
+        <button className="btn-add" onClick={onAddRow}>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add an expense
         </button>
       </div>
     </div>

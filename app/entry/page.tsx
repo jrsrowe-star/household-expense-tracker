@@ -7,8 +7,8 @@ import { MONTH_NAMES, formatCurrency } from "@/lib/types";
 import PersonPanel from "./PersonPanel";
 
 const PERSON_COLORS: Record<Person, string> = {
-  Jordan: "#2563eb",
-  Nicole: "#db2777",
+  Jordan: "#2f6f6b",
+  Nicole: "#c1573f",
 };
 
 export default function EntryPage() {
@@ -119,11 +119,10 @@ export default function EntryPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Monthly Entry</h1>
-        <p>
-          Enter shared expenses for each half of the month. Totals are split 50/50
-          and settled independently for each half.
-        </p>
+        <h1>
+          {MONTH_NAMES[month - 1]} {year} · {half === 1 ? "1st half" : "2nd half"}
+        </h1>
+        <p>Add what each of you spent. We split it 50/50 and settle each half.</p>
       </div>
 
       <div className="card">
