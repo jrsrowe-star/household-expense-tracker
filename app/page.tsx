@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -8,7 +8,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   CartesianGrid,
   PieChart,
   Pie,
@@ -17,12 +16,98 @@ import {
   Line,
 } from "recharts";
 import { supabase } from "@/lib/supabaseClient";
-import type { Category, Expense, Person } from "@/lib/types";
-import { MONTH_NAMES, formatCurrency } from "@/lib/types";
+import type { Category, Expense } from "@/lib/types";
+import { MONTH_NAMES, SECTOR_COLORS, SECTORS, formatCurrency } from "@/lib/types";
 
-const UNCATEGORIZED = "Uncategorized";
 const UNCATEGORIZED_COLOR = "#9ca3af";
-const PERSON_COLORS: Record<string, string> = { Jordan: "#2f6f6b", Nicole: "#c1573f" };
+
+// ─── Multi-select category dropdown ─────────────────────────────────────────
+
+type MultiSelectProps = {
+  categories: Category[];
+  excludedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onToggleAll: () => void;
+};
+
+function CategoryMultiSelect({ categories, excludedIds, onToggle, onToggleAll }: MultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const allSelected = excludedIds.size === 0;
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const label = allSelected
+    ? "All categories"
+    : `${categories.length - excludedIds.size} of ${categories.length} selected`;
+
+  const bySector = useMemo(() => {
+    const map = new Map<string, Category[]>();
+    categories.forEach((c) => {
+      const s = c.sector ?? "Uncategorized";
+      if (!map.has(s)) map.set(s, []);
+      map.get(s)!.push(c);
+    });
+    return map;
+  }, [categories]);
+
+  const sectorOrder = [...SECTORS, "Uncategorized"];
+
+  return (
+    <div className="multiselect-wrapper" ref={ref}>
+      <button
+        className={`multiselect-trigger${open ? " open" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        <span>{label}</span>
+        <span className="chevron">▼</span>
+      </button>
+
+      {open && (
+        <div className="multiselect-menu">
+          <label className="multiselect-option">
+            <input type="checkbox" checked={allSelected} onChange={onToggleAll} />
+            <strong>All categories</strong>
+          </label>
+          <hr className="multiselect-divider" />
+          {sectorOrder.map((sector) => {
+            const cats = bySector.get(sector);
+            if (!cats?.length) return null;
+            return (
+              <div key={sector}>
+                <div className="multiselect-group-label">{sector}</div>
+                {cats.map((cat) => (
+                  <label key={cat.id} className="multiselect-option">
+                    <input
+                      type="checkbox"
+                      checked={!excludedIds.has(cat.id)}
+                      onChange={() => onToggle(cat.id)}
+                    />
+                    <span
+                      className="category-swatch"
+                      style={{ background: cat.color, fontSize: 11, padding: "2px 8px" }}
+                    >
+                      {cat.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Dashboard page ──────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -32,13 +117,9 @@ export default function DashboardPage() {
   const [yearFilter, setYearFilter] = useState<string>("all");
   const [personFilter, setPersonFilter] = useState<string>("all");
   const [halfFilter, setHalfFilter] = useState<string>("all");
-  const [excludedCategoryIds, setExcludedCategoryIds] = useState<Set<string>>(
-    new Set()
-  );
+  const [excludedCategoryIds, setExcludedCategoryIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     setLoading(true);
@@ -57,9 +138,18 @@ export default function DashboardPage() {
     return map;
   }, [categories]);
 
+  function sectorOf(e: Expense): string {
+    const cat = e.category_id ? categoryById.get(e.category_id) : null;
+    return cat?.sector ?? "Uncategorized";
+  }
+
+  function sectorColor(sector: string): string {
+    return SECTOR_COLORS[sector] ?? UNCATEGORIZED_COLOR;
+  }
+
   function categoryLabel(id: string | null) {
-    if (!id) return UNCATEGORIZED;
-    return categoryById.get(id)?.name ?? UNCATEGORIZED;
+    if (!id) return "Uncategorized";
+    return categoryById.get(id)?.name ?? "Uncategorized";
   }
 
   function categoryColor(id: string | null) {
@@ -77,8 +167,7 @@ export default function DashboardPage() {
       if (yearFilter !== "all" && String(e.year) !== yearFilter) return false;
       if (personFilter !== "all" && e.person !== personFilter) return false;
       if (halfFilter !== "all" && String(e.half) !== halfFilter) return false;
-      const catKey = e.category_id ?? "uncategorized";
-      if (excludedCategoryIds.has(catKey)) return false;
+      if (e.category_id && excludedCategoryIds.has(e.category_id)) return false;
       return true;
     });
   }, [expenses, yearFilter, personFilter, halfFilter, excludedCategoryIds]);
@@ -88,74 +177,42 @@ export default function DashboardPage() {
     [filteredExpenses]
   );
 
-  const jordanTotal = useMemo(
-    () =>
-      filteredExpenses
-        .filter((e) => e.person === "Jordan")
-        .reduce((s, e) => s + (e.amount || 0), 0),
-    [filteredExpenses]
-  );
-  const nicoleTotal = useMemo(
-    () =>
-      filteredExpenses
-        .filter((e) => e.person === "Nicole")
-        .reduce((s, e) => s + (e.amount || 0), 0),
-    [filteredExpenses]
-  );
-  const settleDiff = jordanTotal - nicoleTotal;
-  const settleOwed = Math.abs(settleDiff) / 2;
-  let settleWho = "You're all square";
-  if (settleDiff > 0.005) settleWho = "Nicole owes Jordan";
-  else if (settleDiff < -0.005) settleWho = "Jordan owes Nicole";
-
-  // Category names present in the filtered set, used as stacked bar keys.
-  const activeCategoryNames = useMemo(() => {
-    const names = new Set<string>();
-    filteredExpenses.forEach((e) => names.add(categoryLabel(e.category_id)));
-    return Array.from(names);
+  const activeSectors = useMemo(() => {
+    const present = new Set<string>();
+    filteredExpenses.forEach((e) => present.add(sectorOf(e)));
+    const ordered = [...SECTORS].filter((s) => present.has(s));
+    if (present.has("Uncategorized")) ordered.push("Uncategorized");
+    return ordered;
   }, [filteredExpenses, categoryById]);
 
-  const categoryColorByName = useMemo(() => {
-    const map = new Map<string, string>();
-    categories.forEach((c) => map.set(c.name, c.color));
-    map.set(UNCATEGORIZED, UNCATEGORIZED_COLOR);
-    return map;
-  }, [categories]);
-
-  // Monthly breakdown (stacked by category) — respects the year filter when set,
-  // otherwise aggregates by calendar month across all years.
   const monthlyChartData = useMemo(() => {
-    const rows = MONTH_NAMES.map((name) => ({ month: name } as Record<string, any>));
+    const rows = MONTH_NAMES.map((name) => ({ month: name } as Record<string, unknown>));
     filteredExpenses.forEach((e) => {
       const row = rows[e.month - 1];
-      const catName = categoryLabel(e.category_id);
-      row[catName] = (row[catName] || 0) + e.amount;
+      const sector = sectorOf(e);
+      row[sector] = ((row[sector] as number) || 0) + e.amount;
     });
     return rows;
   }, [filteredExpenses, categoryById]);
 
-  // Category breakdown pie.
-  const categoryPieData = useMemo(() => {
+  const sectorPieData = useMemo(() => {
     const totals = new Map<string, number>();
     filteredExpenses.forEach((e) => {
-      const name = categoryLabel(e.category_id);
-      totals.set(name, (totals.get(name) || 0) + e.amount);
+      const sector = sectorOf(e);
+      totals.set(sector, (totals.get(sector) || 0) + e.amount);
     });
     return Array.from(totals.entries())
-      .map(([name, value]) => ({ name, value, color: categoryColorByName.get(name) ?? UNCATEGORIZED_COLOR }))
+      .map(([name, value]) => ({ name, value, color: sectorColor(name) }))
       .sort((a, b) => b.value - a.value);
-  }, [filteredExpenses, categoryById, categoryColorByName]);
+  }, [filteredExpenses, categoryById]);
 
-  // Trend over time across all years/months (independent of year filter), respects
-  // person/category/half filters.
   const trendData = useMemo(() => {
     const totals = new Map<string, number>();
     expenses
       .filter((e) => {
         if (personFilter !== "all" && e.person !== personFilter) return false;
         if (halfFilter !== "all" && String(e.half) !== halfFilter) return false;
-        const catKey = e.category_id ?? "uncategorized";
-        if (excludedCategoryIds.has(catKey)) return false;
+        if (e.category_id && excludedCategoryIds.has(e.category_id)) return false;
         return true;
       })
       .forEach((e) => {
@@ -170,13 +227,19 @@ export default function DashboardPage() {
       });
   }, [expenses, personFilter, halfFilter, excludedCategoryIds]);
 
-  function toggleCategory(catKey: string) {
+  function toggleCategory(id: string) {
     setExcludedCategoryIds((prev) => {
       const next = new Set(prev);
-      if (next.has(catKey)) next.delete(catKey);
-      else next.add(catKey);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
+  }
+
+  function toggleAllCategories() {
+    setExcludedCategoryIds((prev) =>
+      prev.size === 0 ? new Set(categories.map((c) => c.id)) : new Set()
+    );
   }
 
   const sortedTable = useMemo(
@@ -193,11 +256,8 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Good evening, Jordan &amp; Nicole.</h1>
-        <p>
-          Here&apos;s how your shared spending looks
-          {yearFilter !== "all" ? ` in ${yearFilter}` : " across every year"}.
-        </p>
+        <h1>Dashboard</h1>
+        <p>Shared expenses over time — filter by year, person, half, and category.</p>
       </div>
 
       <div className="card">
@@ -207,9 +267,7 @@ export default function DashboardPage() {
             <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
               <option value="all">All years</option>
               {availableYears.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
+                <option key={y} value={y}>{y}</option>
               ))}
             </select>
           </div>
@@ -229,66 +287,26 @@ export default function DashboardPage() {
               <option value="2">2nd half</option>
             </select>
           </div>
-        </div>
-        <div className="field" style={{ marginTop: 10 }}>
-          <label>Categories (click to toggle off)</label>
-          <div className="row" style={{ marginTop: 6 }}>
-            {categories.map((cat) => {
-              const isOff = excludedCategoryIds.has(cat.id);
-              return (
-                <span
-                  key={cat.id}
-                  className="category-swatch"
-                  style={{
-                    background: isOff ? "#d1d5db" : cat.color,
-                    cursor: "pointer",
-                    opacity: isOff ? 0.6 : 1,
-                  }}
-                  onClick={() => toggleCategory(cat.id)}
-                >
-                  {cat.name}
-                </span>
-              );
-            })}
-            <span
-              className="category-swatch"
-              style={{
-                background: excludedCategoryIds.has("uncategorized") ? "#d1d5db" : UNCATEGORIZED_COLOR,
-                cursor: "pointer",
-                opacity: excludedCategoryIds.has("uncategorized") ? 0.6 : 1,
-              }}
-              onClick={() => toggleCategory("uncategorized")}
-            >
-              Uncategorized
-            </span>
+          <div className="field">
+            <label>Categories</label>
+            <CategoryMultiSelect
+              categories={categories}
+              excludedIds={excludedCategoryIds}
+              onToggle={toggleCategory}
+              onToggleAll={toggleAllCategories}
+            />
           </div>
         </div>
       </div>
 
-      <div className="hero-grid">
-        <div className="hero-card settle">
-          <div className="hero-label">Settle up</div>
-          <div className="hero-value">{settleWho}</div>
-          {settleOwed > 0.005 && (
-            <div className="hero-value hero-accent">{formatCurrency(settleOwed)}</div>
-          )}
+      <div className="pills-row">
+        <div className="pill">
+          <span className="label">Total (filtered)</span>
+          <span className="value">{formatCurrency(totalSpend)}</span>
         </div>
-        <div className="hero-card">
-          <div className="hero-label">Total spent</div>
-          <div className="hero-value">{formatCurrency(totalSpend)}</div>
-          <div className="hero-sub">{filteredExpenses.length} entries</div>
-        </div>
-        <div className="hero-card">
-          <div className="hero-person-row">
-            <span className="dot" style={{ background: PERSON_COLORS.Jordan }} />
-            Jordan
-            <span className="amt">{formatCurrency(jordanTotal)}</span>
-          </div>
-          <div className="hero-person-row">
-            <span className="dot" style={{ background: PERSON_COLORS.Nicole }} />
-            Nicole
-            <span className="amt">{formatCurrency(nicoleTotal)}</span>
-          </div>
+        <div className="pill">
+          <span className="label">Entries</span>
+          <span className="value">{filteredExpenses.length}</span>
         </div>
       </div>
 
@@ -298,7 +316,10 @@ export default function DashboardPage() {
         <>
           <div className="chart-grid">
             <div className="card">
-              <h2>Monthly spend by category{yearFilter !== "all" ? ` — ${yearFilter}` : " (all years combined)"}</h2>
+              <h2>
+                Monthly spend by sector
+                {yearFilter !== "all" ? ` — ${yearFilter}` : " (all years combined)"}
+              </h2>
               {filteredExpenses.length === 0 ? (
                 <div className="empty-state">No data for these filters.</div>
               ) : (
@@ -308,12 +329,13 @@ export default function DashboardPage() {
                     <XAxis dataKey="month" tickFormatter={(m) => m.slice(0, 3)} fontSize={12} />
                     <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
                     <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    {activeCategoryNames.map((name) => (
+                    {activeSectors.map((sector) => (
                       <Bar
-                        key={name}
-                        dataKey={name}
+                        key={sector}
+                        dataKey={sector}
                         stackId="a"
-                        fill={categoryColorByName.get(name) ?? UNCATEGORIZED_COLOR}
+                        fill={sectorColor(sector)}
+                        name={sector}
                       />
                     ))}
                   </BarChart>
@@ -322,25 +344,23 @@ export default function DashboardPage() {
             </div>
 
             <div className="card">
-              <h2>Spend by category</h2>
-              {categoryPieData.length === 0 ? (
+              <h2>Spend by sector</h2>
+              {sectorPieData.length === 0 ? (
                 <div className="empty-state">No data for these filters.</div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={categoryPieData}
+                      data={sectorPieData}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      innerRadius={62}
-                      outerRadius={104}
-                      paddingAngle={2}
+                      outerRadius={100}
                       label={(d) => d.name}
                       labelLine={false}
                     >
-                      {categoryPieData.map((entry, i) => (
+                      {sectorPieData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
@@ -362,7 +382,13 @@ export default function DashboardPage() {
                   <XAxis dataKey="label" fontSize={12} />
                   <YAxis fontSize={12} tickFormatter={(v) => `$${v}`} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  <Line type="monotone" dataKey="total" stroke="#3f7d5e" strokeWidth={2.5} dot={false} />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke="#4f46e5"
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -379,6 +405,7 @@ export default function DashboardPage() {
                     <th>Period</th>
                     <th>Person</th>
                     <th>Expense</th>
+                    <th>Sector</th>
                     <th>Category</th>
                     <th>Amount</th>
                   </tr>
@@ -387,10 +414,18 @@ export default function DashboardPage() {
                   {sortedTable.map((e) => (
                     <tr key={e.id}>
                       <td>
-                        {MONTH_NAMES[e.month - 1]} {e.year} · {e.half === 1 ? "1st half" : "2nd half"}
+                        {MONTH_NAMES[e.month - 1]} {e.year} · {e.half === 1 ? "1st" : "2nd"} half
                       </td>
                       <td>{e.person}</td>
                       <td>{e.name || <span style={{ color: "#9ca3af" }}>(unnamed)</span>}</td>
+                      <td>
+                        <span
+                          className="category-swatch"
+                          style={{ background: sectorColor(sectorOf(e)) }}
+                        >
+                          {sectorOf(e)}
+                        </span>
+                      </td>
                       <td>
                         <span
                           className="category-swatch"

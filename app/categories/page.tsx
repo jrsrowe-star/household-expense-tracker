@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { Category } from "@/lib/types";
+import { SECTORS, SECTOR_COLORS } from "@/lib/types";
 
 const RANDOM_COLORS = [
   "#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4",
@@ -18,6 +19,7 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(randomColor());
+  const [newSector, setNewSector] = useState<string>("");
   const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,9 +39,10 @@ export default function CategoriesPage() {
   async function addCategory() {
     const name = newName.trim();
     if (!name) return;
+    const color = newSector ? (SECTOR_COLORS[newSector] ?? newColor) : newColor;
     const { data, error } = await supabase
       .from("categories")
-      .insert({ name, color: newColor })
+      .insert({ name, color, sector: newSector || null })
       .select()
       .single();
     if (!error && data) {
@@ -48,6 +51,7 @@ export default function CategoriesPage() {
       );
       setNewName("");
       setNewColor(randomColor());
+      setNewSector("");
     } else if (error) {
       alert(error.message);
     }
@@ -67,14 +71,9 @@ export default function CategoriesPage() {
   }
 
   async function deleteCategory(id: string) {
-    if (!confirm("Delete this category? Expenses using it will become uncategorized.")) {
-      return;
-    }
+    if (!confirm("Delete this category? Expenses using it will become uncategorized.")) return;
     const { error } = await supabase.from("categories").delete().eq("id", id);
-    if (error) {
-      alert(error.message);
-      return;
-    }
+    if (error) { alert(error.message); return; }
     setCategories((prev) => prev.filter((c) => c.id !== id));
   }
 
@@ -82,7 +81,7 @@ export default function CategoriesPage() {
     <div>
       <div className="page-header">
         <h1>Categories</h1>
-        <p>Add expense categories and assign a color to each. These show up as dropdown options on the Monthly Entry page.</p>
+        <p>Add expense categories, assign a color, and group them into a sector.</p>
       </div>
 
       <div className="card">
@@ -97,6 +96,23 @@ export default function CategoriesPage() {
               placeholder="e.g. Groceries"
               onKeyDown={(e) => e.key === "Enter" && addCategory()}
             />
+          </div>
+          <div className="field">
+            <label>Sector</label>
+            <select
+              value={newSector}
+              onChange={(e) => {
+                setNewSector(e.target.value);
+                if (e.target.value && SECTOR_COLORS[e.target.value]) {
+                  setNewColor(SECTOR_COLORS[e.target.value]);
+                }
+              }}
+            >
+              <option value="">— None —</option>
+              {SECTORS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label>Color</label>
@@ -132,13 +148,27 @@ export default function CategoriesPage() {
                   value={cat.name}
                   onChange={(e) =>
                     setCategories((prev) =>
-                      prev.map((c) =>
-                        c.id === cat.id ? { ...c, name: e.target.value } : c
-                      )
+                      prev.map((c) => c.id === cat.id ? { ...c, name: e.target.value } : c)
                     )
                   }
                   onBlur={(e) => updateCategory(cat.id, { name: e.target.value })}
                 />
+                <select
+                  value={cat.sector ?? ""}
+                  onChange={(e) => {
+                    const sector = e.target.value || null;
+                    const updates: Partial<Category> = { sector };
+                    if (sector && SECTOR_COLORS[sector]) {
+                      updates.color = SECTOR_COLORS[sector];
+                    }
+                    updateCategory(cat.id, updates);
+                  }}
+                >
+                  <option value="">— No sector —</option>
+                  {SECTORS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
                 <span
                   className="category-swatch"
                   style={{ background: cat.color, justifySelf: "start" }}
