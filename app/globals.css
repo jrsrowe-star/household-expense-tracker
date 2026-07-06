@@ -65,8 +65,8 @@ a {
 }
 
 .navbar-monogram {
-  width: 34px;
   height: 34px;
+  padding: 0 10px;
   border-radius: 11px;
   background: var(--text);
   color: var(--bg);
@@ -74,8 +74,9 @@ a {
   align-items: center;
   justify-content: center;
   font-family: var(--serif);
-  font-size: 18px;
+  font-size: 13px;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .navbar-links {
@@ -104,9 +105,9 @@ a {
 
 /* ---------- Layout ---------- */
 .main-content {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 28px 30px 72px;
+  padding: 20px 20px 48px;
 }
 
 .page-header {
