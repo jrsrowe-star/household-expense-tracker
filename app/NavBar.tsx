@@ -15,8 +15,7 @@ export default function NavBar() {
   return (
     <nav className="navbar">
       <div className="navbar-title">
-        <span className="navbar-monogram">164 Chester</span>
-        Household Expenses
+        164 Chester
       </div>
       <div className="navbar-links">
         {LINKS.map((link) => (
