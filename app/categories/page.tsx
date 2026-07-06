@@ -128,61 +128,86 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      <div className="card">
-        <h2>All categories ({categories.length})</h2>
-        {loading ? (
-          <div className="empty-state">Loading…</div>
-        ) : categories.length === 0 ? (
-          <div className="empty-state">No categories yet. Add one above.</div>
-        ) : (
-          <div className="category-list">
-            {categories.map((cat) => (
-              <div className="category-row" key={cat.id}>
-                <input
-                  type="color"
-                  value={cat.color}
-                  onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
-                />
-                <input
-                  type="text"
-                  value={cat.name}
-                  onChange={(e) =>
-                    setCategories((prev) =>
-                      prev.map((c) => c.id === cat.id ? { ...c, name: e.target.value } : c)
-                    )
-                  }
-                  onBlur={(e) => updateCategory(cat.id, { name: e.target.value })}
-                />
-                <select
-                  value={cat.sector ?? ""}
-                  onChange={(e) => {
-                    const sector = e.target.value || null;
-                    const updates: Partial<Category> = { sector };
-                    if (sector && SECTOR_COLORS[sector]) {
-                      updates.color = SECTOR_COLORS[sector];
-                    }
-                    updateCategory(cat.id, updates);
-                  }}
-                >
-                  <option value="">— No sector —</option>
-                  {SECTORS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+      {loading ? (
+        <div className="card"><div className="empty-state">Loading…</div></div>
+      ) : categories.length === 0 ? (
+        <div className="card"><div className="empty-state">No categories yet. Add one above.</div></div>
+      ) : (
+        <>
+          {[...SECTORS, null].map((sector) => {
+            const cats = categories.filter((c) =>
+              sector === null ? !c.sector : c.sector === sector
+            );
+            if (cats.length === 0) return null;
+            const sectorLabel = sector ?? "No Sector";
+            const sectorCol = sector ? SECTOR_COLORS[sector] : "#9ca3af";
+            return (
+              <div className="card" key={sectorLabel}>
+                <h2 style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      background: sectorCol,
+                      flexShrink: 0,
+                    }}
+                  />
+                  {sectorLabel}
+                  <span style={{ fontSize: 13, fontFamily: "var(--sans)", fontWeight: 500, color: "var(--text-muted)" }}>
+                    ({cats.length})
+                  </span>
+                </h2>
+                <div className="category-list">
+                  {cats.map((cat) => (
+                    <div className="category-row" key={cat.id}>
+                      <input
+                        type="color"
+                        value={cat.color}
+                        onChange={(e) => updateCategory(cat.id, { color: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        value={cat.name}
+                        onChange={(e) =>
+                          setCategories((prev) =>
+                            prev.map((c) => c.id === cat.id ? { ...c, name: e.target.value } : c)
+                          )
+                        }
+                        onBlur={(e) => updateCategory(cat.id, { name: e.target.value })}
+                      />
+                      <select
+                        value={cat.sector ?? ""}
+                        onChange={(e) => {
+                          const s = e.target.value || null;
+                          const updates: Partial<Category> = { sector: s };
+                          if (s && SECTOR_COLORS[s]) updates.color = SECTOR_COLORS[s];
+                          updateCategory(cat.id, updates);
+                        }}
+                      >
+                        <option value="">— No sector —</option>
+                        {SECTORS.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                      <span
+                        className="category-swatch"
+                        style={{ background: cat.color, justifySelf: "start" }}
+                      >
+                        {savingId === cat.id ? "Saving…" : "Preview"}
+                      </span>
+                      <button className="btn-danger" onClick={() => deleteCategory(cat.id)}>
+                        Delete
+                      </button>
+                    </div>
                   ))}
-                </select>
-                <span
-                  className="category-swatch"
-                  style={{ background: cat.color, justifySelf: "start" }}
-                >
-                  {savingId === cat.id ? "Saving…" : "Preview"}
-                </span>
-                <button className="btn-danger" onClick={() => deleteCategory(cat.id)}>
-                  Delete
-                </button>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
