@@ -180,7 +180,7 @@ export default function DashboardPage() {
   const activeSectors = useMemo(() => {
     const present = new Set<string>();
     filteredExpenses.forEach((e) => present.add(sectorOf(e)));
-    const ordered = [...SECTORS].filter((s) => present.has(s));
+    const ordered: string[] = [...SECTORS].filter((s) => present.has(s));
     if (present.has("Uncategorized")) ordered.push("Uncategorized");
     return ordered;
   }, [filteredExpenses, categoryById]);
