@@ -486,14 +486,8 @@ table select {
 
 .category-list {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
-}
-
-@media (max-width: 760px) {
-  .category-list {
-    grid-template-columns: 1fr;
-  }
 }
 
 .category-row:hover {
